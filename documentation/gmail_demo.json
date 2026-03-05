@@ -1,0 +1,17 @@
+[
+  {
+    "subject": "Submit AI assignment",
+    "due_date": "2025-11-25",
+    "due_time": "23:00"
+  },
+  {
+    "subject": "Project review meeting",
+    "due_date": "2025-11-22",
+    "due_time": "15:30"
+  },
+  {
+    "subject": "Friend's birthday reminder",
+    "due_date": "2025-11-30",
+    "due_time": "20:00"
+  }
+]

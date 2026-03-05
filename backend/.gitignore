@@ -1,0 +1,11 @@
+# ignore python environment
+backend_env/
+
+# ignore database files (if you don't want to commit)
+digital_twin.db
+
+digital_twin_local.db
+
+# pycache
+__pycache__/
+*.pyc

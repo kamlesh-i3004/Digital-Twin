@@ -1,0 +1,100 @@
+{
+  "project_name": "Your Digital Twin – AI-Powered Personal Assistant",
+  "project_type": "Backend API (Flask + SQLite + JWT)",
+  "project_owner": "B.Sc. Data Science Final Year Student",
+  "goal": "Build a backend system that acts as a personal digital assistant where each user can securely manage their own tasks using JWT-based authentication.",
+  
+  "final_expected_system": {
+    "description": "A secure REST API backend where users can register, login, and manage their own tasks. Each user can only access their own data.",
+    "features": [
+      "User Registration (with password hashing)",
+      "User Login (JWT authentication)",
+      "Create Task (JWT protected)",
+      "Get Tasks (JWT protected, user-specific)",
+      "Update Task (JWT protected)",
+      "Delete Task (JWT protected)"
+    ],
+    "security": {
+      "password_storage": "Hashed using Werkzeug",
+      "authentication": "JWT (JSON Web Token)",
+      "authorization": "User-specific task access via token identity"
+    }
+  },
+
+  "architecture": {
+    "backend_framework": "Flask",
+    "database": "SQLite",
+    "orm": "Flask-SQLAlchemy",
+    "authentication": "Flask-JWT-Extended",
+    "structure": {
+      "folder": "backend_clean",
+      "main_file": "app.py",
+      "test_file": "test_api.py",
+      "database_file": "digital_twin.db"
+    }
+  },
+
+  "how_it_works": {
+    "registration_flow": [
+      "User sends username + password",
+      "Password is hashed",
+      "User stored in database"
+    ],
+    "login_flow": [
+      "User sends username + password",
+      "Password is verified using hash check",
+      "JWT token is generated",
+      "Token contains user_id"
+    ],
+    "task_flow": [
+      "User sends JWT token in header",
+      "Backend extracts user_id from token",
+      "Task is saved with user_id",
+      "User can only see tasks linked to their ID"
+    ]
+  },
+
+  "database_schema": {
+    "User": {
+      "id": "Primary Key",
+      "username": "Unique String",
+      "password": "Hashed String"
+    },
+    "Task": {
+      "id": "Primary Key",
+      "title": "String",
+      "description": "String",
+      "completed": "Boolean",
+      "user_id": "Foreign Key -> User.id"
+    }
+  },
+
+  "current_status": {
+    "backend_setup": "Completed",
+    "database_configuration": "Completed",
+    "user_registration": "Completed",
+    "user_login_jwt": "Completed",
+    "create_task_api": "Completed",
+    "get_tasks_api": "Completed",
+    "update_task_api": "Not Implemented Yet",
+    "delete_task_api": "Not Implemented Yet",
+    "frontend": "Not Started",
+    "deployment": "Not Started"
+  },
+
+  "project_completion_percentage": 70,
+
+  "remaining_work": [
+    "Implement Update Task API",
+    "Implement Delete Task API",
+    "Improve task completion toggle",
+    "Final testing and cleanup",
+    "Optional: Add simple frontend or documentation demo"
+  ],
+
+  "exam_explanation_summary": {
+    "root_404_reason": "Project is API-only backend. No root route is defined intentionally.",
+    "security_explanation": "JWT ensures only authenticated users can access their own data.",
+    "data_privacy_explanation": "Tasks are filtered using user_id extracted from JWT token."
+  }
+}
