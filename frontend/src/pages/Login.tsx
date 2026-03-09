@@ -48,6 +48,7 @@ const Login: React.FC = () => {
       await login({
         email: formData.email,
         password: formData.password,
+        rememberMe: formData.rememberMe,
       });
       toast.success('Welcome back!', {
         description: 'You have successfully logged in.',
@@ -134,6 +135,7 @@ const Login: React.FC = () => {
                     size="icon"
                     className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4 text-muted-foreground" />
@@ -147,7 +149,7 @@ const Login: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="rememberMe"
@@ -160,18 +162,6 @@ const Login: React.FC = () => {
                     Remember me
                   </Label>
                 </div>
-                <Link
-                  to="#"
-                  className="text-sm text-primary hover:underline"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    toast.info('Coming soon!', {
-                      description: 'Password reset feature will be available soon.',
-                    });
-                  }}
-                >
-                  Forgot password?
-                </Link>
               </div>
             </CardContent>
 

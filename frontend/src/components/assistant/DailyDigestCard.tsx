@@ -49,12 +49,15 @@ const DailyDigestCard: React.FC<DailyDigestCardProps> = ({
     }
   };
 
-  const today = new Date().toLocaleDateString('en-IN', {
+  const now = new Date();
+  const today = now.toLocaleDateString('en-IN', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   });
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   if (isLoading) {
     return (
@@ -103,7 +106,7 @@ const DailyDigestCard: React.FC<DailyDigestCardProps> = ({
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
               <h2 className="text-xl font-bold">
-                {digest.greeting}
+                {greeting}
                 {userName ? `, ${userName.split(' ')[0]}!` : '!'}
               </h2>
             </div>

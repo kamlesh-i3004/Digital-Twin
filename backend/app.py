@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Allow OAuth over HTTP for local development only
+if os.environ.get("FLASK_ENV") != "production":
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+
 from extensions import db, jwt, limiter
 
 
@@ -16,6 +20,7 @@ def create_app() -> Flask:
         "DATABASE_URL", "mysql+pymysql://root:@localhost/alkapro"
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB max request size
 
     jwt_secret = os.environ.get("JWT_SECRET_KEY")
     if not jwt_secret:

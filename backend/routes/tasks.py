@@ -6,6 +6,16 @@ from extensions import db
 from models import Task
 from helpers import api_ok, api_err, serialize_task, get_recommendation
 
+ALLOWED_PRIORITIES = {"Low", "Medium", "High"}
+ALLOWED_CATEGORIES = {"General", "Work", "Jobs", "Personal", "Shopping", "Health", "Finance", "Education", "Government", "Other"}
+
+try:
+    import numpy as np
+    from sklearn.linear_model import LinearRegression
+    _ML_AVAILABLE = True
+except ImportError:
+    _ML_AVAILABLE = False
+
 tasks_bp = Blueprint("tasks", __name__)
 
 
@@ -25,11 +35,19 @@ def create_task():
         except ValueError:
             return api_err("Invalid date format. Use YYYY-MM-DD")
 
+    priority = data.get("priority", "Medium")
+    if priority not in ALLOWED_PRIORITIES:
+        return api_err(f"Invalid priority. Must be one of: {', '.join(sorted(ALLOWED_PRIORITIES))}")
+
+    category = data.get("category", "General")
+    if category not in ALLOWED_CATEGORIES:
+        return api_err(f"Invalid category. Must be one of: {', '.join(sorted(ALLOWED_CATEGORIES))}")
+
     task = Task(
         title=data["title"],
         description=data.get("description", ""),
-        priority=data.get("priority", "Medium"),
-        category=data.get("category", "General"),
+        priority=priority,
+        category=category,
         due_date=due_date,
         user_id=user_id,
     )
@@ -210,8 +228,8 @@ def predict_tasks():
         return api_ok({"estimated_tasks_next_week": est, "confidence": "low"})
 
     try:
-        import numpy as np
-        from sklearn.linear_model import LinearRegression
+        if not _ML_AVAILABLE:
+            raise ImportError("ML libraries not available")
         X = np.array(range(len(values))).reshape(-1, 1)
         y = np.array(values)
         model = LinearRegression()
@@ -243,19 +261,28 @@ def update_task(task_id):
 
     data = request.get_json() or {}
 
-    for field in ("title", "description", "priority", "category"):
-        if field in data:
-            setattr(task, field, data[field])
+    if "title" in data:
+        task.title = data["title"]
+    if "description" in data:
+        task.description = data["description"]
+    if "priority" in data:
+        if data["priority"] not in ALLOWED_PRIORITIES:
+            return api_err(f"Invalid priority. Must be one of: {', '.join(sorted(ALLOWED_PRIORITIES))}")
+        task.priority = data["priority"]
+    if "category" in data:
+        if data["category"] not in ALLOWED_CATEGORIES:
+            return api_err(f"Invalid category. Must be one of: {', '.join(sorted(ALLOWED_CATEGORIES))}")
+        task.category = data["category"]
 
+    # Support both "completed" (bool) and "status" ("completed"/"pending") fields
+    is_completed = None
     if "completed" in data:
-        task.completed = bool(data["completed"])
-        if task.completed and not task.completed_at:
-            task.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        elif not task.completed:
-            task.completed_at = None
+        is_completed = bool(data["completed"])
+    elif "status" in data:
+        is_completed = data["status"] == "completed"
 
-    if "status" in data:
-        task.completed = data["status"] == "completed"
+    if is_completed is not None:
+        task.completed = is_completed
         if task.completed and not task.completed_at:
             task.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         elif not task.completed:

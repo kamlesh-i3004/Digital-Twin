@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
@@ -25,26 +25,30 @@ import {
   Moon,
   Brain,
   ChevronDown,
+  Link2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-  { path: '/notes', label: 'Notes', icon: FileText },
-  { path: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, hash: '' },
+  { path: '/tasks', label: 'Tasks', icon: CheckSquare, hash: '' },
+  { path: '/notes', label: 'Notes', icon: FileText, hash: '' },
+  { path: '/analytics', label: 'Analytics', icon: BarChart3, hash: '' },
+  { path: '/settings', label: 'Settings', icon: Settings, hash: '' },
+  { path: '/settings', label: 'Integrations', icon: Link2, hash: '#integrations' },
 ];
 
-const Sidebar: React.FC<{ className?: string; onItemClick?: () => void }> = ({ 
-  className, 
-  onItemClick 
+const Sidebar: React.FC<{ className?: string; onItemClick?: () => void }> = ({
+  className,
+  onItemClick
 }) => {
+  const location = useLocation();
+
   return (
     <div className={cn("flex flex-col h-full bg-card border-r", className)}>
       {/* Logo */}
       <div className="p-6 border-b">
-        <NavLink to="/dashboard" className="flex items-center gap-3">
+        <NavLink to="/" className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
             <Brain className="w-6 h-6 text-primary-foreground" />
           </div>
@@ -57,24 +61,27 @@ const Sidebar: React.FC<{ className?: string; onItemClick?: () => void }> = ({
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            onClick={onItemClick}
-            className={({ isActive }) =>
-              cn(
+        {navItems.map((item) => {
+          const isActive = item.hash
+            ? location.pathname === item.path && location.hash === item.hash
+            : location.pathname === item.path && location.hash !== '#integrations';
+          return (
+            <NavLink
+              key={item.label}
+              to={item.hash ? `${item.path}${item.hash}` : item.path}
+              onClick={onItemClick}
+              className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200",
                 isActive
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )
-            }
-          >
-            <item.icon className="w-5 h-5" />
-            {item.label}
-          </NavLink>
-        ))}
+              )}
+            >
+              <item.icon className="w-5 h-5" />
+              {item.label}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Footer */}
@@ -179,14 +186,14 @@ const Header: React.FC = () => {
 
 const Layout: React.FC = () => {
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex overflow-x-hidden">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-64 fixed h-full">
         <Sidebar />
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
+      <div className="w-full lg:ml-64 lg:w-[calc(100%-16rem)] flex flex-col min-h-screen">
         <Header />
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
           <div className="max-w-7xl mx-auto">

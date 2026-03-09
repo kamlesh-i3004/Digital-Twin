@@ -119,7 +119,6 @@ def _build_digest_content(user_name: str, stats: dict) -> tuple:
 
 def _collect_stats(user_id: int) -> dict:
     """Collect weekly stats for a user. Must be called within an active Flask app context."""
-    from sqlalchemy import cast, Date as SADate
     from extensions import db
     from models import Task
 
@@ -155,24 +154,9 @@ def _collect_stats(user_id: int) -> dict:
         Task.due_date <= week_end,
     ).order_by(Task.due_date).limit(10).all()
 
-    # Streak
-    cutoff = now - timedelta(days=365)
-    rows = db.session.query(
-        cast(Task.completed_at, SADate).label("day")
-    ).filter(
-        Task.user_id == user_id,
-        Task.completed == True,
-        Task.completed_at >= cutoff,
-    ).distinct().all()
-    completed_days = {r.day for r in rows}
-    streak = 0
-    check_day = (now - timedelta(days=1)).date()
-    for _ in range(365):
-        if check_day in completed_days:
-            streak += 1
-            check_day -= timedelta(days=1)
-        else:
-            break
+    # Streak (use shared function from helpers)
+    from helpers import calculate_streak
+    streak = calculate_streak(user_id, now)
 
     completion_rate = round((completed_this_week / created_this_week * 100), 1) if created_this_week > 0 else 0.0
 

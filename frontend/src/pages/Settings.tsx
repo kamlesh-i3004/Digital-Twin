@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { authApi, integrationsApi } from '@/services/api';
-import type { GoogleIntegrationStatus, GmailSender } from '@/types';
+import type { GoogleIntegrationStatus, GmailSender, GmailDiscoveredSender } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,10 +31,11 @@ import {
   Calendar,
   Plus,
   X,
+  Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { useSearchParams } from 'react-router-dom';
+import { cn, getErrorMessage } from '@/lib/utils';
+import { useSearchParams, useLocation } from 'react-router-dom';
 
 const NOTIF_KEY = 'notification_prefs';
 
@@ -50,6 +51,7 @@ const Settings: React.FC = () => {
   const { user, logout, updateUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const [isUpdating, setIsUpdating] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -68,6 +70,9 @@ const Settings: React.FC = () => {
   const [senders, setSenders] = useState<GmailSender[]>([]);
   const [newSender, setNewSender] = useState('');
   const [isAddingSender, setIsAddingSender] = useState(false);
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [showDiscoverDialog, setShowDiscoverDialog] = useState(false);
+  const [discoveredSenders, setDiscoveredSenders] = useState<GmailDiscoveredSender[]>([]);
 
   // Load notification prefs from localStorage
   const [notifications, setNotifications] = useState<NotifPrefs>(() => {
@@ -133,6 +138,15 @@ const Settings: React.FC = () => {
     }
   }, [searchParams, setSearchParams]);
 
+  // Scroll to integrations section when navigated via sidebar link
+  useEffect(() => {
+    if (location.hash === '#integrations') {
+      setTimeout(() => {
+        document.getElementById('integrations-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [location.hash]);
+
   const handleConnectGoogle = async () => {
     try {
       setIsConnecting(true);
@@ -161,13 +175,49 @@ const Settings: React.FC = () => {
   const handleSyncGmail = async () => {
     try {
       setIsSyncingGmail(true);
-      const result = await integrationsApi.syncGmail();
-      toast.success(`Email sync complete`, {
-        description: `Created ${result.created} new task${result.created !== 1 ? 's' : ''}, skipped ${result.skipped} duplicate${result.skipped !== 1 ? 's' : ''}.`,
-      });
+      await integrationsApi.syncGmail();
+      // Backend runs sync in a background thread — poll with exponential backoff
+      let delay = 1000;
+      const maxDelay = 5000;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((res) => setTimeout(res, delay));
+        delay = Math.min(delay * 1.5, maxDelay);
+        const status = await integrationsApi.getGmailSyncStatus();
+        if (status.status === 'done') {
+          const r = status.result;
+          const created = r?.created ?? 0;
+          const duplicates = r?.duplicates ?? 0;
+          const aiSkipped = r?.ai_skipped ?? 0;
+          const errors = r?.errors ?? 0;
+          const parts: string[] = [];
+          parts.push(`Created ${created} new task${created !== 1 ? 's' : ''}.`);
+          if (duplicates > 0) parts.push(`${duplicates} already synced.`);
+          if (aiSkipped > 0) parts.push(`${aiSkipped} not actionable.`);
+          if (errors > 0) parts.push(`${errors} failed to parse.`);
+          parts.push('Check your Tasks page.');
+          if (r?.last_failure_raw) {
+            const raw = r.last_failure_raw.slice(0, 250);
+            parts.push(`Parse raw: ${raw}${r.last_failure_raw.length > 250 ? '…' : ''}`);
+          } else if (r?.last_failure_exc) {
+            parts.push(`Sync error: ${r.last_failure_exc}`);
+          } else if (r?.parse_failures?.length) {
+            const first = r.parse_failures[0];
+            const candidate = first.candidate?.slice(0, 250);
+            parts.push(
+              `Parse failure example: ${candidate}${candidate?.length === 250 ? '…' : ''}`
+            );
+          }
+          toast.success('Email sync complete', { description: parts.join(' ') });
+          return;
+        }
+        if (status.status === 'error') {
+          toast.error(status.error || 'Gmail sync failed');
+          return;
+        }
+      }
+      toast.warning('Sync is taking longer than expected. Check your Tasks page in a moment.');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gmail sync failed';
-      toast.error(msg);
+      toast.error(getErrorMessage(err, 'Gmail sync failed'));
     } finally {
       setIsSyncingGmail(false);
     }
@@ -181,8 +231,7 @@ const Settings: React.FC = () => {
         description: `Synced ${result.synced} event${result.synced !== 1 ? 's' : ''} to Google Calendar.`,
       });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Calendar sync failed';
-      toast.error(msg);
+      toast.error(getErrorMessage(err, 'Calendar sync failed'));
     } finally {
       setIsSyncingCalendar(false);
     }
@@ -218,6 +267,33 @@ const Settings: React.FC = () => {
       toast.success('Sender removed from whitelist');
     } catch {
       toast.error('Failed to remove sender');
+    }
+  };
+
+  const handleDiscoverSenders = async () => {
+    try {
+      setIsDiscovering(true);
+      const discovered = await integrationsApi.discoverSenders();
+      setDiscoveredSenders(discovered);
+      setShowDiscoverDialog(true);
+    } catch {
+      toast.error('Failed to fetch Gmail senders');
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
+
+  const handleWhitelistDiscovered = async (email: string) => {
+    if (senders.some((s) => s.email === email)) {
+      toast.info('Already in whitelist');
+      return;
+    }
+    try {
+      const added = await integrationsApi.addSender(email);
+      setSenders((prev) => [...prev, added]);
+      toast.success(`${email} added to whitelist`);
+    } catch {
+      toast.error('Failed to add sender');
     }
   };
 
@@ -272,10 +348,7 @@ const Settings: React.FC = () => {
       setShowPasswordDialog(false);
       setPasswordData({ current: '', newPw: '', confirm: '' });
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Failed to update password. Check your current password.';
-      setPasswordError(msg);
+      setPasswordError(getErrorMessage(err, 'Failed to update password. Check your current password.'));
     } finally {
       setIsChangingPassword(false);
     }
@@ -490,7 +563,7 @@ const Settings: React.FC = () => {
       </Card>
 
       {/* Integrations Section */}
-      <Card>
+      <Card id="integrations-section">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Link2 className="w-5 h-5 text-primary" />
@@ -632,11 +705,29 @@ const Settings: React.FC = () => {
 
               {/* Sender whitelist */}
               <div className="space-y-3">
-                <div>
-                  <h4 className="font-medium text-sm">Email Sender Whitelist</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Only emails from these senders will be imported. Your other emails stay private.
-                  </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-medium text-sm">Email Sender Whitelist</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Only emails from these senders will be imported. Your other emails stay private.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleDiscoverSenders}
+                    disabled={isDiscovering}
+                    className="flex-shrink-0 text-xs"
+                  >
+                    {isDiscovering ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Search className="w-3.5 h-3.5 mr-1.5" />
+                        Discover Senders
+                      </>
+                    )}
+                  </Button>
                 </div>
 
                 {/* Add sender */}
@@ -683,6 +774,7 @@ const Settings: React.FC = () => {
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive flex-shrink-0"
                           onClick={() => handleRemoveSender(sender.email)}
+                          aria-label={`Remove ${sender.email}`}
                         >
                           <X className="w-3.5 h-3.5" />
                         </Button>
@@ -733,6 +825,53 @@ const Settings: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Discover Senders Dialog */}
+      <Dialog open={showDiscoverDialog} onOpenChange={setShowDiscoverDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gmail Senders (Last 30 Days)</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Click "Whitelist" on senders you want to import tasks from.
+          </p>
+          <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+            {discoveredSenders.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No senders found.</p>
+            ) : (
+              discoveredSenders.map((s) => {
+                const alreadyAdded = senders.some((w) => w.email === s.email);
+                return (
+                  <div
+                    key={s.email}
+                    className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{s.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{s.email}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-muted-foreground">{s.count} email{s.count !== 1 ? 's' : ''}</span>
+                      <Button
+                        size="sm"
+                        variant={alreadyAdded ? 'outline' : 'default'}
+                        disabled={alreadyAdded}
+                        className="text-xs h-7 px-2"
+                        onClick={() => handleWhitelistDiscovered(s.email)}
+                      >
+                        {alreadyAdded ? <Check className="w-3 h-3" /> : 'Whitelist'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDiscoverDialog(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Logout Confirmation Dialog */}
       <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>

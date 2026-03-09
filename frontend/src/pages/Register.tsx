@@ -185,6 +185,7 @@ const Register: React.FC = () => {
                     size="icon"
                     className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4 text-muted-foreground" />
@@ -197,7 +198,8 @@ const Register: React.FC = () => {
                 {/* Password Strength Meter */}
                 {formData.password.length > 0 && (() => {
                   const passed = passwordRequirements.filter((r) => r.test(formData.password)).length;
-                  const strengthColors = ['bg-destructive', 'bg-destructive', 'bg-warning', 'bg-info', 'bg-success'];
+                  const barColors = ['bg-destructive', 'bg-destructive', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
+                  const textColors = ['text-destructive', 'text-destructive', 'text-yellow-600', 'text-blue-600', 'text-green-600'];
                   const strengthLabels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
                   return (
                     <div className="mt-2 space-y-1">
@@ -207,12 +209,12 @@ const Register: React.FC = () => {
                             key={i}
                             className={cn(
                               'h-1.5 flex-1 rounded-full transition-all',
-                              i < passed ? strengthColors[passed - 1] : 'bg-muted'
+                              i < passed ? barColors[passed - 1] : 'bg-muted'
                             )}
                           />
                         ))}
                       </div>
-                      <p className={cn('text-xs font-medium', strengthColors[passed - 1]?.replace('bg-', 'text-'))}>
+                      <p className={cn('text-xs font-medium', textColors[passed - 1])}>
                         {strengthLabels[passed - 1] || ''}
                       </p>
                     </div>
@@ -259,6 +261,7 @@ const Register: React.FC = () => {
                     size="icon"
                     className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="w-4 h-4 text-muted-foreground" />
@@ -282,20 +285,7 @@ const Register: React.FC = () => {
                   className={errors.agreeTerms ? 'border-destructive' : ''}
                 />
                 <Label htmlFor="agreeTerms" className="text-sm font-normal leading-tight cursor-pointer">
-                  I agree to the{' '}
-                  <Link to="#" className="text-primary hover:underline" onClick={(e) => {
-                    e.preventDefault();
-                    toast.info('Coming soon!', { description: 'Terms of service will be available soon.' });
-                  }}>
-                    Terms of Service
-                  </Link>{' '}
-                  and{' '}
-                  <Link to="#" className="text-primary hover:underline" onClick={(e) => {
-                    e.preventDefault();
-                    toast.info('Coming soon!', { description: 'Privacy policy will be available soon.' });
-                  }}>
-                    Privacy Policy
-                  </Link>
+                  I agree that my data will be stored securely and used only for this application
                 </Label>
               </div>
               {errors.agreeTerms && (

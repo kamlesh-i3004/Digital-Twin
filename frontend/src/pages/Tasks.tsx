@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -139,7 +140,7 @@ const TaskForm: React.FC<{
     onClose();
   };
 
-  const categories = ['Personal', 'Work', 'Shopping', 'Health', 'Finance', 'Education', 'Other'];
+  const categories = ['Personal', 'Work', 'Jobs', 'Shopping', 'Health', 'Finance', 'Education', 'Government', 'Other'];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -230,7 +231,7 @@ const TaskForm: React.FC<{
                       setFormData({ ...formData, due_date: d.toISOString().split('T')[0] });
                     }
                   }}
-                  initialFocus
+                  autoFocus
                 />
               </PopoverContent>
             </Popover>
@@ -280,6 +281,129 @@ const DeleteConfirmDialog: React.FC<{
   </Dialog>
 );
 
+// ─── Task Detail Sheet ──────────────────────────────────────────────────────
+const TaskDetailSheet: React.FC<{
+  task: Task | null;
+  onClose: () => void;
+  onEdit: (task: Task) => void;
+  onToggleStatus: (task: Task) => void;
+  onDelete: (task: Task) => void;
+}> = ({ task, onClose, onEdit, onToggleStatus, onDelete }) => {
+  if (!task) return null;
+
+  const priorityStyle: Record<string, string> = {
+    High: 'bg-destructive/10 text-destructive border-destructive/20',
+    Medium: 'bg-warning/10 text-warning-foreground border-warning/20',
+    Low: 'bg-info/10 text-info border-info/20',
+  };
+
+  return (
+    <Sheet open={!!task} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="pb-4 border-b">
+          <div className="flex items-start gap-3 pr-6">
+            <div className={cn(
+              'mt-0.5 w-3 h-3 rounded-full flex-shrink-0',
+              task.status === 'completed' ? 'bg-success' : 'bg-primary'
+            )} />
+            <SheetTitle className={cn(
+              'text-left text-lg leading-snug',
+              task.status === 'completed' && 'line-through text-muted-foreground'
+            )}>
+              {task.title}
+            </SheetTitle>
+          </div>
+        </SheetHeader>
+
+        <div className="pt-5 space-y-5">
+          {/* Metadata badges */}
+          <div className="flex flex-wrap gap-2">
+            <Badge className={priorityStyle[task.priority]} variant="outline">
+              {task.priority} Priority
+            </Badge>
+            <Badge variant="secondary">{task.category}</Badge>
+            <Badge variant={task.status === 'completed' ? 'default' : 'outline'}>
+              {task.status === 'completed' ? '✓ Completed' : 'Pending'}
+            </Badge>
+            {task.source_email_id && (
+              <Badge variant="outline" className="border-blue-400 text-blue-500">
+                Gmail
+              </Badge>
+            )}
+            {task.calendar_event_id && (
+              <Badge variant="outline" className="border-green-500 text-green-600">
+                On Calendar
+              </Badge>
+            )}
+          </div>
+
+          {/* Due date */}
+          {task.due_date && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CalendarIcon className="w-4 h-4 flex-shrink-0" />
+              <span>Due {new Date(task.due_date).toLocaleDateString('en-IN', {
+                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+              })}</span>
+            </div>
+          )}
+
+          {/* Full description / email content */}
+          {task.description ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {task.source_email_id ? 'Email Content' : 'Description'}
+              </p>
+              <div className="bg-muted rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                {task.description}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No description added.</p>
+          )}
+
+          {/* Created at */}
+          <p className="text-xs text-muted-foreground">
+            Created {new Date(task.created_at).toLocaleDateString('en-IN', {
+              day: 'numeric', month: 'short', year: 'numeric',
+            })}
+          </p>
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2 pt-2 border-t">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { onClose(); onEdit(task); }}
+            >
+              <Edit2 className="w-4 h-4 mr-1.5" />
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { onToggleStatus(task); onClose(); }}
+            >
+              {task.status === 'pending' ? (
+                <><CheckCircle className="w-4 h-4 mr-1.5" />Mark Complete</>
+              ) : (
+                <><Circle className="w-4 h-4 mr-1.5" />Reopen</>
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => { onClose(); onDelete(task); }}
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+};
+
 const Tasks: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -294,6 +418,7 @@ const Tasks: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
@@ -314,7 +439,7 @@ const Tasks: React.FC = () => {
 
   const handleCreateTask = async (taskData: Partial<Task>) => {
     try {
-      if (!taskData.title || !taskData.priority || !taskData.status) {
+      if (!taskData.title || !taskData.priority) {
         toast.error('Missing required task fields');
         return;
       }
@@ -678,17 +803,22 @@ const Tasks: React.FC = () => {
                       checked={selectedIds.has(task.id)}
                       onCheckedChange={() => toggleSelect(task.id)}
                       className="mt-1"
+                      aria-label={`Select ${task.title}`}
                     />
                   ) : (
                     <Checkbox
                       checked={task.status === 'completed'}
                       onCheckedChange={() => handleToggleStatus(task)}
                       className="mt-1"
+                      aria-label={`Mark ${task.title} as ${task.status === 'completed' ? 'pending' : 'completed'}`}
                     />
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
+                      <button
+                        className="flex-1 text-left min-w-0"
+                        onClick={() => !selectionMode && setViewingTask(task)}
+                      >
                         <h4 className={cn(
                           'font-medium truncate',
                           task.status === 'completed' && 'line-through text-muted-foreground'
@@ -701,14 +831,14 @@ const Tasks: React.FC = () => {
                         )}>
                           {task.description}
                         </p>
-                      </div>
+                      </button>
                       <div className="flex items-center gap-2">
                         <Badge className={priorityColors[task.priority]} variant="outline">
                           {task.priority}
                         </Badge>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Task actions">
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -821,6 +951,15 @@ const Tasks: React.FC = () => {
         onClose={() => setDeletingTask(null)}
         onConfirm={handleDeleteTask}
         taskTitle={deletingTask?.title || ''}
+      />
+
+      {/* Task Detail Sheet */}
+      <TaskDetailSheet
+        task={viewingTask}
+        onClose={() => setViewingTask(null)}
+        onEdit={(task) => { setEditingTask(task); setIsFormOpen(true); }}
+        onToggleStatus={handleToggleStatus}
+        onDelete={(task) => setDeletingTask(task)}
       />
     </div>
   );

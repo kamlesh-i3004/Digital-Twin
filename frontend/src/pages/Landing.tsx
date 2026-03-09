@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import {
   Brain,
   CheckSquare,
@@ -16,14 +17,11 @@ import {
   Zap,
   Clock,
   Target,
-  Users,
-  Star,
   ArrowRight,
   Menu,
   X,
   Sun,
   Moon,
-  ChevronRight,
   CheckCircle2,
   LayoutDashboard,
 } from 'lucide-react';
@@ -73,7 +71,7 @@ const howItWorks = [
     step: '01',
     title: 'Create Your Account',
     description: 'Sign up in seconds and set up your personal workspace. No credit card required.',
-    icon: Users,
+    icon: CheckCircle2,
   },
   {
     step: '02',
@@ -86,76 +84,6 @@ const howItWorks = [
     title: 'Get AI Insights',
     description: 'Receive smart recommendations and track your productivity with detailed analytics.',
     icon: Sparkles,
-  },
-];
-
-const testimonials = [
-  {
-    name: 'Sarah Johnson',
-    role: 'Product Manager',
-    content: 'Digital Twin has completely transformed how I manage my daily tasks. The AI recommendations are spot-on!',
-    avatar: 'SJ',
-  },
-  {
-    name: 'Michael Chen',
-    role: 'Software Developer',
-    content: 'The analytics feature helps me understand my productivity patterns. Best task management app I\'ve used.',
-    avatar: 'MC',
-  },
-  {
-    name: 'Emily Davis',
-    role: 'Freelance Designer',
-    content: 'Clean interface, powerful features, and the dark mode is perfect for late-night work sessions.',
-    avatar: 'ED',
-  },
-];
-
-const pricingPlans = [
-  {
-    name: 'Free',
-    price: '$0',
-    period: 'forever',
-    description: 'Perfect for getting started',
-    features: [
-      'Up to 50 tasks',
-      'Basic notes',
-      '7-day analytics',
-      'Email support',
-    ],
-    cta: 'Get Started',
-    popular: false,
-  },
-  {
-    name: 'Pro',
-    price: '$9',
-    period: 'per month',
-    description: 'For power users who want more',
-    features: [
-      'Unlimited tasks',
-      'Rich text notes',
-      'Full analytics history',
-      'AI recommendations',
-      'Priority support',
-      'Custom categories',
-    ],
-    cta: 'Start Free Trial',
-    popular: true,
-  },
-  {
-    name: 'Team',
-    price: '$29',
-    period: 'per month',
-    description: 'For teams that work together',
-    features: [
-      'Everything in Pro',
-      'Team collaboration',
-      'Shared workspaces',
-      'Admin controls',
-      'API access',
-      'Dedicated support',
-    ],
-    cta: 'Contact Sales',
-    popular: false,
   },
 ];
 
@@ -216,12 +144,9 @@ const Landing: React.FC = () => {
               >
                 How It Works
               </button>
-              <button
-                onClick={() => scrollToSection('pricing')}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Pricing
-              </button>
+              <Link to="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                About
+              </Link>
             </nav>
 
             {/* Right Actions */}
@@ -231,6 +156,7 @@ const Landing: React.FC = () => {
                 size="icon"
                 onClick={toggleTheme}
                 className="hidden sm:flex"
+                aria-label="Toggle theme"
               >
                 {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
               </Button>
@@ -259,6 +185,7 @@ const Landing: React.FC = () => {
                 size="icon"
                 className="md:hidden"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
               >
                 {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </Button>
@@ -282,12 +209,7 @@ const Landing: React.FC = () => {
               >
                 How It Works
               </button>
-              <button
-                onClick={() => scrollToSection('pricing')}
-                className="block w-full text-left py-2 text-sm font-medium"
-              >
-                Pricing
-              </button>
+              <Link to="/about" className="block py-2 text-sm font-medium">About</Link>
               <Separator />
               {!isAuthenticated && (
                 <div className="space-y-2">
@@ -348,23 +270,25 @@ const Landing: React.FC = () => {
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-4">
-              No credit card required. Free plan available.
+              Free forever. No credit card required.
             </p>
           </div>
         </div>
 
-        {/* Hero Stats */}
+        {/* Hero Value Props */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
             {[
-              { value: '10K+', label: 'Active Users' },
-              { value: '1M+', label: 'Tasks Completed' },
-              { value: '99.9%', label: 'Uptime' },
-              { value: '4.9/5', label: 'User Rating' },
-            ].map((stat, index) => (
+              { icon: CheckSquare, label: 'Smart Task Management' },
+              { icon: Sparkles, label: 'AI-Powered Insights' },
+              { icon: BarChart3, label: 'Productivity Analytics' },
+              { icon: Shield, label: 'Secure & Private' },
+            ].map((item, index) => (
               <div key={index} className="text-center">
-                <div className="text-2xl sm:text-3xl font-bold text-primary">{stat.value}</div>
-                <div className="text-sm text-muted-foreground">{stat.label}</div>
+                <div className="w-12 h-12 mx-auto mb-2 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <item.icon className="w-6 h-6 text-primary" />
+                </div>
+                <div className="text-sm font-medium">{item.label}</div>
               </div>
             ))}
           </div>
@@ -413,20 +337,20 @@ const Landing: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 items-stretch gap-6">
             {howItWorks.map((item, index) => (
-              <div key={index} className="relative">
-                <div className="bg-card rounded-2xl p-8 border shadow-sm hover:shadow-md transition-shadow">
+              <div key={index} className="relative flex">
+                <div className="bg-card rounded-2xl p-8 border shadow-sm hover:shadow-md transition-shadow flex flex-col w-full">
                   <div className="text-5xl font-bold text-primary/20 mb-4">{item.step}</div>
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
                     <item.icon className="w-6 h-6 text-primary" />
                   </div>
                   <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
-                  <p className="text-muted-foreground">{item.description}</p>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{item.description}</p>
                 </div>
                 {index < howItWorks.length - 1 && (
-                  <div className="hidden md:block absolute top-1/2 -right-4 transform -translate-y-1/2 z-10">
-                    <ChevronRight className="w-8 h-8 text-muted-foreground/30" />
+                  <div className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-background border shadow-sm items-center justify-center">
+                    <ArrowRight className="w-3.5 h-3.5 text-primary/60" />
                   </div>
                 )}
               </div>
@@ -569,105 +493,6 @@ const Landing: React.FC = () => {
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section className="py-20 lg:py-32 bg-muted/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <Badge variant="outline" className="mb-4">Testimonials</Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              Loved by Thousands
-            </h2>
-            <p className="text-muted-foreground">
-              See what our users have to say about their experience with Digital Twin.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {testimonials.map((testimonial, index) => (
-              <Card key={index} className="bg-card">
-                <CardContent className="p-6">
-                  <div className="flex gap-1 mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    ))}
-                  </div>
-                  <p className="text-muted-foreground mb-6">"{testimonial.content}"</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-sm font-medium text-primary">{testimonial.avatar}</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">{testimonial.name}</p>
-                      <p className="text-sm text-muted-foreground">{testimonial.role}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section id="pricing" className="py-20 lg:py-32">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <Badge variant="outline" className="mb-4">Pricing</Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              Simple, Transparent Pricing
-            </h2>
-            <p className="text-muted-foreground">
-              Choose the plan that works best for you. Start free and upgrade anytime.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {pricingPlans.map((plan, index) => (
-              <Card
-                key={index}
-                className={cn(
-                  'relative',
-                  plan.popular && 'border-primary shadow-lg scale-105'
-                )}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-primary text-primary-foreground">Most Popular</Badge>
-                  </div>
-                )}
-                <CardContent className="p-6">
-                  <div className="text-center mb-6">
-                    <h3 className="text-lg font-semibold mb-2">{plan.name}</h3>
-                    <div className="flex items-baseline justify-center gap-1">
-                      <span className="text-4xl font-bold">{plan.price}</span>
-                      <span className="text-muted-foreground">/{plan.period}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">{plan.description}</p>
-                  </div>
-                  <ul className="space-y-3 mb-6">
-                    {plan.features.map((feature, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button
-                    className="w-full"
-                    variant={plan.popular ? 'default' : 'outline'}
-                    asChild
-                  >
-                    <Link to={isAuthenticated ? '/dashboard' : '/register'}>
-                      {plan.cta}
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* CTA Section */}
       <section className="py-20 lg:py-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -679,8 +504,8 @@ const Landing: React.FC = () => {
                 Ready to Boost Your Productivity?
               </h2>
               <p className="text-primary-foreground/80 mb-8">
-                Join thousands of users who have transformed their workflow with Digital Twin.
-                Start for free today.
+                Start managing your tasks smarter with AI-powered insights.
+                Free forever, no strings attached.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 {isAuthenticated ? (
@@ -712,7 +537,7 @@ const Landing: React.FC = () => {
       {/* Footer */}
       <footer className="border-t py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-8 mb-8">
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
@@ -728,33 +553,25 @@ const Landing: React.FC = () => {
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><button onClick={() => scrollToSection('features')} className="hover:text-foreground">Features</button></li>
-                <li><button onClick={() => scrollToSection('pricing')} className="hover:text-foreground">Pricing</button></li>
+                <li><button onClick={() => scrollToSection('how-it-works')} className="hover:text-foreground">How It Works</button></li>
+                <li><Link to="/about" className="hover:text-foreground">About</Link></li>
                 <li><Link to="/dashboard" className="hover:text-foreground">Dashboard</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Resources</h4>
+              <h4 className="font-semibold mb-4">Account</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="#" className="hover:text-foreground">Documentation</Link></li>
-                <li><Link to="#" className="hover:text-foreground">API</Link></li>
-                <li><Link to="#" className="hover:text-foreground">Support</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="#" className="hover:text-foreground">Privacy</Link></li>
-                <li><Link to="#" className="hover:text-foreground">Terms</Link></li>
-                <li><Link to="#" className="hover:text-foreground">Security</Link></li>
+                <li><Link to="/login" className="hover:text-foreground">Sign In</Link></li>
+                <li><Link to="/register" className="hover:text-foreground">Create Account</Link></li>
               </ul>
             </div>
           </div>
           <div className="pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              © 2024 Digital Twin. All rights reserved.
+              &copy; {new Date().getFullYear()} Digital Twin. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={toggleTheme}>
+              <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
                 {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               </Button>
             </div>
@@ -764,8 +581,5 @@ const Landing: React.FC = () => {
     </div>
   );
 };
-
-// Import Separator for the mobile menu
-import { Separator } from '@/components/ui/separator';
 
 export default Landing;

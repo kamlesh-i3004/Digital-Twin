@@ -205,7 +205,7 @@ const Notes: React.FC = () => {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setSelectedNote(null)}>
+          <Button variant="ghost" size="icon" onClick={() => setSelectedNote(null)} aria-label="Back to notes">
             <ChevronLeft className="w-5 h-5" />
           </Button>
           <h1 className="text-lg font-semibold">Note</h1>
@@ -385,7 +385,7 @@ const Notes: React.FC = () => {
         {/* Note Detail (Desktop) */}
         {selectedNote && (
           <div className="hidden lg:block lg:col-span-2">
-            <Card className="h-[calc(100vh-200px)]">
+            <Card className="h-[calc(100vh-12rem)] min-h-[300px]">
               <CardHeader className="flex flex-row items-start justify-between">
                 <div>
                   <CardTitle className="text-xl">{selectedNote.title}</CardTitle>
@@ -415,7 +415,7 @@ const Notes: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[calc(100vh-320px)]">
+                <ScrollArea className="h-[calc(100vh-20rem)] min-h-[200px]">
                   <div className="whitespace-pre-wrap text-foreground">
                     {selectedNote.content}
                   </div>

@@ -14,7 +14,7 @@ import type {
   AuthResponse,
   GoogleIntegrationStatus,
   GmailSender,
-  GmailSyncResult,
+  GmailDiscoveredSender,
   GmailSyncStatus,
   CalendarSyncResult,
   BulkTaskResult,
@@ -22,20 +22,25 @@ import type {
   AssistantDigest,
 } from '@/types';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://127.0.0.1:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL as string | undefined;
+
+if (!API_BASE_URL && import.meta.env.PROD) {
+  console.error('VITE_API_URL is not configured. API calls will fail in production.');
+}
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL || 'http://127.0.0.1:5000/api',
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token (check both storages for rememberMe support)
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -51,7 +56,11 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -202,6 +211,11 @@ export const integrationsApi = {
 
   removeSender: async (email: string): Promise<void> => {
     await api.delete<ApiResponse<null>>(`/integrations/gmail/senders/${encodeURIComponent(email)}`);
+  },
+
+  discoverSenders: async (): Promise<GmailDiscoveredSender[]> => {
+    const response = await api.get<ApiResponse<GmailDiscoveredSender[]>>('/integrations/gmail/senders/discover');
+    return response.data.data;
   },
 
   // Sync

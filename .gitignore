@@ -1,32 +1,43 @@
-# Virtual Environment
-alkaenv/
-venv/
-env/
-
-# Node modules
-node_modules/
-npm-debug.log
-yarn-error.log
+# Environment variables
+.env
+.env.*
+!.env.example
 
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
+*.pyo
+*.pyd
 .Python
 *.egg-info/
 dist/
 build/
+.venv/
+venv/
+env/
+*.egg
 
-# IDE
-.vscode/
-.idea/
-*.swp
+# Node / Frontend
+node_modules/
+dist/
+build/
+.npm
+*.tsbuildinfo
 
-# Environment variables
-.env
-.env.local
+# Logs
+*.log
+logs/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Misc
+*.tmp
+*.bak

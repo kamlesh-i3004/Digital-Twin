@@ -4,10 +4,12 @@ import base64
 import hmac as _hmac
 import hashlib as _hashlib
 import threading
+import string
+import random
 from datetime import datetime, timedelta, timezone
 from flask import Blueprint, request, redirect, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from extensions import db
+from extensions import db, limiter
 from models import Task, GoogleIntegration, GmailSenderWhitelist, DigestSettings, User
 from helpers import api_ok, api_err, serialize_task, get_google_credentials
 
@@ -16,7 +18,7 @@ integrations_bp = Blueprint("integrations", __name__)
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:5000/api/integrations/google/callback")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").split(",")[0].strip()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 GOOGLE_SCOPES = [
@@ -33,9 +35,9 @@ _sync_lock = threading.Lock()
 
 # ─── OAuth Helpers ────────────────────────────────────────────────────────────────
 
-def _make_oauth_state(user_id: str, secret: str) -> str:
+def _make_oauth_state(user_id: str, secret: str, code_verifier: str = "") -> str:
     nonce = base64.urlsafe_b64encode(os.urandom(16)).decode()
-    payload = json.dumps({"user_id": user_id, "nonce": nonce})
+    payload = json.dumps({"user_id": user_id, "nonce": nonce, "cv": code_verifier})
     sig = _hmac.new(secret.encode(), payload.encode(), _hashlib.sha256).hexdigest()
     return base64.urlsafe_b64encode(f"{payload}|{sig}".encode()).decode()
 
@@ -52,7 +54,7 @@ def _verify_oauth_state(state: str, secret: str) -> dict:
         raise ValueError("Invalid OAuth state") from exc
 
 
-def _build_flow():
+def _build_flow(code_verifier=None):
     from google_auth_oauthlib.flow import Flow
     client_config = {
         "web": {
@@ -63,7 +65,8 @@ def _build_flow():
             "redirect_uris": [GOOGLE_REDIRECT_URI],
         }
     }
-    flow = Flow.from_client_config(client_config, scopes=GOOGLE_SCOPES)
+    kwargs = {"code_verifier": code_verifier} if code_verifier else {}
+    flow = Flow.from_client_config(client_config, scopes=GOOGLE_SCOPES, **kwargs)
     flow.redirect_uri = GOOGLE_REDIRECT_URI
     return flow
 
@@ -77,8 +80,10 @@ def google_auth_url():
         return api_err("Google integration not configured. Add GOOGLE_CLIENT_ID to .env", 503)
     user_id = get_jwt_identity()
     secret = current_app.config["JWT_SECRET_KEY"]
-    flow = _build_flow()
-    state = _make_oauth_state(user_id, secret)
+    chars = string.ascii_letters + string.digits + "-._~"
+    code_verifier = "".join(random.SystemRandom().choice(chars) for _ in range(128))
+    flow = _build_flow(code_verifier=code_verifier)
+    state = _make_oauth_state(user_id, secret, code_verifier)
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
@@ -101,11 +106,12 @@ def google_callback():
         secret = current_app.config["JWT_SECRET_KEY"]
         state_data = _verify_oauth_state(state, secret)
         user_id = int(state_data["user_id"])
+        code_verifier = state_data.get("cv") or None
     except ValueError:
         return redirect(f"{FRONTEND_URL}/settings?error=invalid_state")
 
     try:
-        flow = _build_flow()
+        flow = _build_flow(code_verifier=code_verifier)
         flow.fetch_token(code=code)
         creds = flow.credentials
 
@@ -177,8 +183,9 @@ def list_senders():
 def add_sender():
     user_id = get_jwt_identity()
     data = request.get_json() or {}
+    import re as _re
     email = data.get("email", "").strip().lower()
-    if not email or "@" not in email:
+    if not email or not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
         return api_err("Valid email is required")
 
     existing = GmailSenderWhitelist.query.filter_by(user_id=int(user_id), sender_email=email).first()
@@ -225,26 +232,101 @@ def _extract_email_body(payload: dict, max_chars: int = 3000) -> str:
     return ""
 
 
-# General-purpose email task extraction prompt (not job-specific)
+def _parse_groq_json(raw_text: str) -> dict | None:
+    """Try to robustly extract JSON from model output."""
+    import ast
+    import re
+
+    cleaned = re.sub(r"```(?:json)?", "", raw_text).strip()
+    cleaned = cleaned.replace("```", "").strip()
+
+    # Take the outermost JSON object if present
+    first = cleaned.find("{")
+    last = cleaned.rfind("}")
+    candidate = cleaned
+    if first != -1 and last != -1 and first < last:
+        candidate = cleaned[first : last + 1]
+
+    # First try strict JSON
+    try:
+        return json.loads(candidate)
+    except Exception:
+        pass
+
+    # Try a lenient JSON-ish parsing
+    try:
+        return json.loads(candidate.replace("'", '"'))
+    except Exception:
+        pass
+
+    # Try Python literal eval as a last resort
+    try:
+        return ast.literal_eval(candidate)
+    except Exception:
+        current_app.logger.debug("GROQ JSON parse failed. raw=%s", raw_text)
+        current_app.logger.debug("GROQ JSON candidate=%s", candidate)
+        return None
+
+
+# General-purpose email task extraction prompt
 _GMAIL_SYSTEM_PROMPT = """\
 You are a personal assistant that reads emails and extracts actionable tasks.
 
-Extract tasks from any email that requires the recipient to take an action. This includes:
-- Meeting invitations or schedule confirmations requiring acceptance or preparation
-- Deadlines or deliverables ("submit by", "respond by", "complete by", "due", "before")
-- Follow-up actions from email threads
-- Bills, payments, or financial actions needed
-- Appointments or bookings to confirm or arrange
-- Any direct request requiring a response or action
-- Reminders about upcoming events needing preparation
+Extract a task from ANY email that the recipient should act on, track, or be aware of. Be INCLUSIVE — when in doubt, create a task. This covers:
+
+JOB & CAREER:
+- Job match notifications (save/apply to interesting jobs)
+- Application status updates (interview invite, rejection, offer, shortlisted)
+- HR replies and recruiter messages (respond, schedule interview)
+- Online assessments or coding tests scheduled or due
+- Offer letters or contract documents to review/sign
+
+SUBSCRIPTIONS & SERVICES:
+- Subscription renewal or expiry notices (renew, cancel, review)
+- Auto-pay or auto-renewal upcoming (verify payment method, cancel if unwanted)
+- Trial ending (decide to keep or cancel)
+- Account suspension or deactivation warning
+
+GOVERNMENT & OFFICIAL:
+- Tax notices, ITR filing reminders, refund status
+- License renewal (driving license, professional license)
+- ID or document expiry (passport, Aadhaar, PAN, voter ID)
+- Visa or permit expiry or application update
+- Court, legal, or regulatory notices
+- Utility bill due (electricity, water, gas)
+
+FINANCE:
+- Payment due, invoice, overdue notice
+- Credit card statement, EMI due
+- Insurance premium due or policy expiry
+- Refund or claim action needed
+- Bank account action required
+
+HEALTH & APPOINTMENTS:
+- Doctor, dentist, or specialist appointment confirmation or reminder
+- Lab test results with follow-up needed
+- Medicine refill or prescription renewal reminder
+
+MEETINGS & SCHEDULING:
+- Meeting invitations (accept, decline, prepare)
+- Rescheduling or cancellation requests
+- Interview call or video call scheduled
+
+GENERAL:
+- Any deadline ("submit by", "respond by", "due", "before", "expires on")
+- Direct requests requiring a response or action
+- Document to review or sign
 
 Priority rules:
-- High: urgent response needed, deadline within 2 days, meeting in 24-48 hours, payment overdue
-- Medium: deadline within a week, meeting next week, action needed but not immediately urgent
-- Low: soft deadlines, optional actions, low-stakes follow-ups
+- High: urgent, deadline within 2 days, payment overdue, interview within 48h, expiry imminent
+- Medium: deadline within a week, action needed but not immediately urgent
+- Low: soft deadlines, informational with optional action, track for later
 
-Category must be one of: "Work|Personal|Shopping|Health|Finance|Education|Other"
-Choose the most fitting category based on the email content.
+Category must be one of: "Work|Jobs|Personal|Shopping|Health|Finance|Education|Government|Other"
+- Jobs: anything about job search, applications, interviews, HR
+- Government: tax, IDs, licenses, legal, government services
+- Finance: bills, payments, banking, insurance
+- Health: medical appointments, prescriptions, health reminders
 
 Respond ONLY with valid JSON in this exact schema (no markdown, no explanation):
 {
@@ -253,10 +335,10 @@ Respond ONLY with valid JSON in this exact schema (no markdown, no explanation):
   "description": "what needs to be done and any key details (max 300 chars)",
   "priority": "Low|Medium|High",
   "due_date": "YYYY-MM-DD or null",
-  "category": "Work|Personal|Shopping|Health|Finance|Education|Other"
+  "category": "Work|Jobs|Personal|Shopping|Health|Finance|Education|Government|Other"
 }
 
-Set should_create_task to false only for: newsletters, promotions, receipts with no required action, automated notifications, or pure FYI emails."""
+Set should_create_task to false ONLY for: pure marketing/promotional blasts, social media digests, order shipping updates with zero action needed, newsletters with no deadlines, and spam."""
 
 
 def _do_gmail_sync(app, user_id: int, integration_id: int, sender_emails: list, groq_key: str):
@@ -278,20 +360,25 @@ def _do_gmail_sync(app, user_id: int, integration_id: int, sender_emails: list, 
 
             sender_query = " OR ".join(f"from:{e}" for e in sender_emails)
             results = service.users().messages().list(
-                userId="me", q=f"({sender_query}) newer_than:30d", maxResults=30
+                userId="me", q=f"({sender_query}) newer_than:30d", maxResults=50
             ).execute()
             messages = results.get("messages", [])
 
             created_count = 0
-            skipped_count = 0
+            duplicates_count = 0
+            ai_skipped_count = 0
+            error_count = 0
             created_tasks = []
+            parse_failures: list[dict] = []
+            last_failure_raw: str | None = None
+            last_failure_exc: str | None = None
             groq_client = Groq(api_key=groq_key)
 
             for msg_ref in messages:
                 msg_id = msg_ref["id"]
 
                 if Task.query.filter_by(user_id=user_id, source_email_id=msg_id).first():
-                    skipped_count += 1
+                    duplicates_count += 1
                     continue
 
                 msg = service.users().messages().get(
@@ -305,6 +392,7 @@ def _do_gmail_sync(app, user_id: int, integration_id: int, sender_emails: list, 
                 date_header = headers.get("Date", "")
                 body_text = _extract_email_body(payload) or msg.get("snippet", "")
 
+                raw = None
                 try:
                     user_content = (
                         f"Subject: {subject[:300]}\n"
@@ -313,24 +401,51 @@ def _do_gmail_sync(app, user_id: int, integration_id: int, sender_emails: list, 
                         f"Email body:\n{body_text[:2500]}"
                     )
                     chat = groq_client.chat.completions.create(
-                        model="llama3-8b-8192",
+                        model="llama-3.1-8b-instant",
                         messages=[
                             {"role": "system", "content": _GMAIL_SYSTEM_PROMPT},
                             {"role": "user", "content": user_content},
                         ],
                         temperature=0.1,
-                        max_tokens=300,
+                        max_tokens=500,
+                        timeout=30,
                     )
                     raw = chat.choices[0].message.content.strip()
-                    start = raw.find("{")
-                    end = raw.rfind("}") + 1
-                    parsed = json.loads(raw[start:end])
-                except Exception:
-                    skipped_count += 1
+
+                    parsed = _parse_groq_json(raw)
+                    if parsed is None:
+                        # Treat parse failures as "not actionable" (AI didn't return valid task JSON)
+                        ai_skipped_count += 1
+                        last_failure_raw = raw
+
+                        # Store a few examples of what failed to parse for debugging
+                        if len(parse_failures) < 5:
+                            import re
+
+                            cleaned = re.sub(r"```(?:json)?", "", raw).strip()
+                            cleaned = cleaned.replace("```", "").strip()
+                            first = cleaned.find("{")
+                            last = cleaned.rfind("}")
+                            candidate = cleaned
+                            if first != -1 and last != -1 and first < last:
+                                candidate = cleaned[first : last + 1]
+
+                            parse_failures.append({
+                                "msg_id": msg_id,
+                                "subject": subject,
+                                "raw": raw,
+                                "candidate": candidate,
+                            })
+                        continue
+                except Exception as exc:
+                    error_count += 1
+                    last_failure_exc = str(exc)
+                    if raw is not None:
+                        last_failure_raw = raw
                     continue
 
                 if not parsed.get("should_create_task"):
-                    skipped_count += 1
+                    ai_skipped_count += 1
                     continue
 
                 due_date = None
@@ -354,8 +469,29 @@ def _do_gmail_sync(app, user_id: int, integration_id: int, sender_emails: list, 
                 created_tasks.append({"id": str(task.id), "title": task.title})
                 created_count += 1
 
-            db.session.commit()
-            result = {"created": created_count, "skipped": skipped_count, "tasks": created_tasks}
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                raise
+            result = {
+                "created": created_count,
+                "duplicates": duplicates_count,
+                "ai_skipped": ai_skipped_count,
+                "errors": error_count,
+                "skipped": duplicates_count + ai_skipped_count + error_count,
+                "tasks": created_tasks,
+                "parse_failures": parse_failures,
+                "last_failure_raw": last_failure_raw,
+                "last_failure_exc": last_failure_exc,
+            }
+            if parse_failures:
+                current_app.logger.warning(
+                    "Gmail sync parse failures (showing up to %d): %s",
+                    len(parse_failures),
+                    json.dumps(parse_failures, default=str)[:4000],
+                )
+
             with _sync_lock:
                 _sync_status[user_id] = {
                     "status": "done",
@@ -365,6 +501,7 @@ def _do_gmail_sync(app, user_id: int, integration_id: int, sender_emails: list, 
                 }
 
     except Exception as exc:
+        current_app.logger.exception("Gmail sync background thread failed")
         with _sync_lock:
             _sync_status[user_id] = {
                 "status": "error",
@@ -374,9 +511,57 @@ def _do_gmail_sync(app, user_id: int, integration_id: int, sender_emails: list, 
             }
 
 
+# ─── Gmail Sender Discovery ───────────────────────────────────────────────────────
+
+@integrations_bp.route("/integrations/gmail/senders/discover", methods=["GET"])
+@jwt_required()
+def discover_gmail_senders():
+    """Return unique senders from recent Gmail so the user can whitelist them."""
+    import re
+    user_id = get_jwt_identity()
+    integration = GoogleIntegration.query.filter_by(user_id=int(user_id)).first()
+    if not integration:
+        return api_err("Google account not connected", 403)
+
+    try:
+        from googleapiclient.discovery import build as gbuild
+        creds = get_google_credentials(integration)
+        service = gbuild("gmail", "v1", credentials=creds)
+
+        results = service.users().messages().list(
+            userId="me", q="newer_than:30d", maxResults=50
+        ).execute()
+        messages = results.get("messages", [])
+
+        seen: dict = {}
+        for msg_ref in messages:
+            msg = service.users().messages().get(
+                userId="me", id=msg_ref["id"], format="metadata",
+                metadataHeaders=["From"]
+            ).execute()
+            headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
+            from_header = headers.get("From", "")
+            match = re.search(r"<([^>]+)>", from_header)
+            email_addr = match.group(1).strip().lower() if match else from_header.strip().lower()
+            name = re.sub(r"\s*<[^>]+>", "", from_header).strip().strip('"') if match else email_addr
+            if not email_addr or "@" not in email_addr:
+                continue
+            if email_addr in seen:
+                seen[email_addr]["count"] += 1
+            else:
+                seen[email_addr] = {"email": email_addr, "name": name or email_addr, "count": 1}
+
+        senders = sorted(seen.values(), key=lambda x: x["count"], reverse=True)
+        return api_ok(senders)
+    except Exception:
+        current_app.logger.exception("discover_gmail_senders failed")
+        return api_err("Failed to fetch Gmail senders. Please try again.", 500)
+
+
 # ─── Gmail Sync Routes ────────────────────────────────────────────────────────────
 
 @integrations_bp.route("/integrations/gmail/sync", methods=["POST"])
+@limiter.limit("5 per hour")
 @jwt_required()
 def gmail_sync():
     user_id = int(get_jwt_identity())

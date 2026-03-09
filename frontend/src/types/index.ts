@@ -100,10 +100,29 @@ export interface GmailSender {
   added_at: string;
 }
 
+export interface GmailDiscoveredSender {
+  email: string;
+  name: string;
+  count: number;
+}
+
+export interface GmailSyncParseFailure {
+  msg_id: string;
+  subject: string;
+  raw: string;
+  candidate: string;
+}
+
 export interface GmailSyncResult {
   created: number;
+  duplicates: number;
+  ai_skipped: number;
+  errors: number;
   skipped: number;
   tasks: Task[];
+  parse_failures?: GmailSyncParseFailure[];
+  last_failure_raw?: string | null;
+  last_failure_exc?: string | null;
 }
 
 export interface GmailSyncStatus {
