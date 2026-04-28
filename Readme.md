@@ -1,16 +1,16 @@
-# 🤖 Your Digital Twin – AI-Powered Personal Assistant (Backend)
+# Your Digital Twin – AI-Powered Personal Assistant (Backend)
 
 This repository contains the **Flask-based REST API** for a digital assistant where users can register,
 login with JWT authentication, and manage their own tasks (CRUD operations).
 
-### 🧩 Technologies
+### Technologies
 - Python 3.10+
 - Flask
 - Flask-SQLAlchemy (SQLite database)
 - Flask-JWT-Extended for authentication
 - Werkzeug for password hashing
 
-### 📁 Relevant Structure
+###  Relevant Structure
 ```
 backend_clean/             # main API server
   ├─ app.py                # Flask app and routes
@@ -20,7 +20,7 @@ backend_clean/             # main API server
 frontend/                  # React user interface
   └─ ts-app/               # downloaded React + TypeScript (Vite) UI
 ```
-### 🚀 Quick Start
+###  Quick Start
 ```powershell
 cd alkapro\backend_clean
 python -m venv venv            # create virtual env (optional)
@@ -32,7 +32,7 @@ python app.py
 ```
 API runs on `http://127.0.0.1:5000`.
 
-### 📝 API Endpoints
+###  API Endpoints
 - `POST /api/register` – JSON `{username,password}`
 - `POST /api/login` – JSON `{username,password}` returns `access_token`
 - All task routes require `Authorization: Bearer <token>` header
@@ -46,13 +46,13 @@ Task endpoints:
 - `GET /api/tasks/stats` – simple counts
 - `GET /api/tasks/recommend` – returns a single task suggestion
 
-### 🧪 Running the Tests
+###  Running the Tests
 Make sure the server is running, then:
 ```powershell
 python test_api.py
 ```
 
-### 📌 Notes
+###  Notes
 - Passwords are hashed with Werkzeug.
 - JWT secret can be set via `JWT_SECRET_KEY` environment variable for deployment.
 - Tasks are always filtered by `user_id` extracted from token – users cannot access each other’s data.
