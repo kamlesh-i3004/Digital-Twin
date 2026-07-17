@@ -501,7 +501,7 @@ def _do_gmail_sync(app, user_id: int, integration_id: int, sender_emails: list, 
                 }
 
     except Exception as exc:
-        current_app.logger.exception("Gmail sync background thread failed")
+        print(f"Gmail sync background thread failed: {exc}")
         with _sync_lock:
             _sync_status[user_id] = {
                 "status": "error",

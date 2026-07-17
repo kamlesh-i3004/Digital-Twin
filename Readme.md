@@ -1,63 +1,68 @@
-# 🤖 Your Digital Twin – AI-Powered Personal Assistant (Backend)
+# Digital Twin – AI Task Analytics Platform
 
-This repository contains the **Flask-based REST API** for a digital assistant where users can register,
-login with JWT authentication, and manage their own tasks (CRUD operations).
+An intelligent task management backend that turns your inbox into actionable tasks and forecasts your workload — built with Flask, MySQL, and Groq's LLM API.
 
-### 🧩 Technologies
-- Python 3.10+
-- Flask
-- Flask-SQLAlchemy (SQLite database)
-- Flask-JWT-Extended for authentication
-- Werkzeug for password hashing
+## Features
 
-### 📁 Relevant Structure
-```
-backend_clean/             # main API server
-  ├─ app.py                # Flask app and routes
-  ├─ test_api.py           # functional tests
-  ├─ digital_twin.db       # SQLite file (created automatically)
-  └─ requirements.txt
-frontend/                  # React user interface
-  └─ ts-app/               # downloaded React + TypeScript (Vite) UI
-```
-### 🚀 Quick Start
-```powershell
-cd alkapro\backend_clean
-python -m venv venv            # create virtual env (optional)
-venv\Scripts\activate
+### 📧 Gmail-to-Task Pipeline
+- Connects to Gmail via Google OAuth2
+- Scans whitelisted senders for new emails (last 30 days)
+- Uses Groq's LLaMA 3.1 model to classify each email and extract structured task data (title, priority, due date, category)
+- Automatically skips non-actionable emails and deduplicates against existing tasks
+- Typical batch of a few emails processes in under 5 seconds
+
+### 📊 Task Volume Forecasting
+- `/tasks/predict` endpoint estimates next week's task volume
+- Fits a scikit-learn `LinearRegression` model on historical weekly task counts
+- Requires 3+ weeks of usage history for a high-confidence prediction; falls back to a simple average for newer accounts
+
+### 💬 Natural-Language Task Queries
+- `/query` endpoint accepts free-text questions (e.g., "what's overdue," "show high priority tasks")
+- Rule-based intent matching maps questions to structured filters (due date, priority, completion status)
+
+### 📈 Analytics Dashboard
+- Completion rate, priority distribution, and daily streak tracking
+- Visualized on the frontend using Recharts
+
+### 🔐 Auth & Data
+- JWT-based authentication (Flask-JWT-Extended)
+- MySQL relational schema (Flask-SQLAlchemy + PyMySQL) for tasks, users, and Google integration state
+
+## Tech Stack
+**Backend:** Flask, scikit-learn, Groq API, MySQL, Google Gmail/OAuth2 API
+**Frontend:** React, Recharts
+
+## Setup
+
+### Backend
+\`\`\`bash
+cd backend
+python -m venv venv
+venv\Scripts\activate  # Windows
 pip install -r requirements.txt
-# set JWT secret if you like:
-# set JWT_SECRET_KEY=your_secret
+\`\`\`
+
+Create a \`.env\` file in \`backend/\` with:
+\`\`\`
+DATABASE_URL=mysql+pymysql://user:password@localhost/alkapro
+JWT_SECRET_KEY=your_secret_key
+GROQ_API_KEY=your_groq_key
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_client_secret
+FRONTEND_URL=http://localhost:5173
+\`\`\`
+
+\`\`\`bash
 python app.py
-```
-API runs on `http://127.0.0.1:5000`.
+\`\`\`
 
-### 📝 API Endpoints
-- `POST /api/register` – JSON `{username,password}`
-- `POST /api/login` – JSON `{username,password}` returns `access_token`
-- All task routes require `Authorization: Bearer <token>` header
+### Frontend
+\`\`\`bash
+cd frontend
+npm install
+npm run dev
+\`\`\`
 
-Task endpoints:
-- `GET /api/tasks` – list tasks (query params: `priority`, `completed`, `sort_by` e.g. `due_date`/`-due_date`)
-- `POST /api/tasks` – create {title,description?,priority?,due_date?}
-- `PUT/PATCH /api/tasks/<id>` – update any field
-- `DELETE /api/tasks/<id>` – remove task
-- `GET /api/tasks/overdue` – overdue tasks
-- `GET /api/tasks/stats` – simple counts
-- `GET /api/tasks/recommend` – returns a single task suggestion
-
-### 🧪 Running the Tests
-Make sure the server is running, then:
-```powershell
-python test_api.py
-```
-
-### 📌 Notes
-- Passwords are hashed with Werkzeug.
-- JWT secret can be set via `JWT_SECRET_KEY` environment variable for deployment.
-- Tasks are always filtered by `user_id` extracted from token – users cannot access each other’s data.
-- There is no root (`/`) route by design; this is an API‑only backend.
-
----
-Feel free to expand with a frontend or deploy to a cloud service.
-
+## Known Limitations
+- Forecasting is a simple trend-based linear model, not validated against a held-out test set
+- Gmail sync is rate-limited to 5 requests/hour per user
